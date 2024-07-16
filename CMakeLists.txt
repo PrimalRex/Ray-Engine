@@ -6,4 +6,7 @@ set(CMAKE_CXX_STANDARD 17)
 add_executable(RayEngine main.cpp
         cpu_renderer.cpp
         cpu_renderer.h
-        vec3.h)
+        vec3.h
+        world_object.cpp
+        world_object.h
+        scene.h)

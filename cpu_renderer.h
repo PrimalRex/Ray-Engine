@@ -2,6 +2,8 @@
 #define CPU_RENDERER_H
 #include <cstdint>
 
+#include "scene.h"
+
 //PARAMS
 
 // Render resolution (3840x2160p = 2160 Res)
@@ -17,9 +19,9 @@ class cpu_renderer {
 public:
     cpu_renderer();
     ~cpu_renderer();
-    void Render();
+    void Render(const Scene &scene);
 
-    static RGB CalculatePixel(const double &x, const double &y);
+    static RGB CalculatePixel(const double &x, const double &y, const Scene &scene);
     RGB* GetimgBuffer() const;
 
     static int GetOutputWidth();

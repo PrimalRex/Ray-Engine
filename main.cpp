@@ -27,10 +27,14 @@ int main() {
         image << cpu_renderer::GetOutputWidth() << " " << cpu_renderer::GetOutputHeight() << std::endl;
         image << "255" << std::endl;
 
+        Scene main_scene;
+        main_scene.Objects.emplace_back(new sphere({0,0,0}, {255,0,0}, {.5,.5,.5}));
+        main_scene.Objects.emplace_back(new sphere({0,.2,.2}, {0,0,255}, {1,1,1}));
+
         // Render
         auto render_s = std::chrono::high_resolution_clock::now();
 
-        renderer.Render();
+        renderer.Render(main_scene);
 
         auto render_e = std::chrono::high_resolution_clock::now();
         std::chrono::duration<double> elapsed_seconds = render_e - render_s;

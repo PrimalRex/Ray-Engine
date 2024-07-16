@@ -1,5 +1,8 @@
 
 #include "cpu_renderer.h"
+
+#include <float.h>
+
 #include "vec3.h"
 
 cpu_renderer::cpu_renderer() {
@@ -21,7 +24,7 @@ int cpu_renderer::GetOutputHeight() {
 }
 
 // Starts the rendering
-void cpu_renderer::Render() {
+void cpu_renderer::Render(const Scene &scene) {
     for (unsigned int y = 0; y < GetOutputHeight(); y++) {
         for (unsigned int x = 0; x < GetOutputWidth(); x++) {
             // Calculate normalized coordinates in the range [-1, 1]
@@ -30,7 +33,7 @@ void cpu_renderer::Render() {
             normalized_x *= ratio;
             double normalized_y = (2.0 * y / GetOutputHeight()) - 1.0;
 
-            m_imgBuffer[x + y * GetOutputWidth()] = CalculatePixel(normalized_x, normalized_y);
+            m_imgBuffer[x + y * GetOutputWidth()] = CalculatePixel(normalized_x, normalized_y, scene);
         }
     }
 }
@@ -42,7 +45,7 @@ RGB* cpu_renderer::GetimgBuffer() const {
 }
 
 // Calculate at each pixel the color that should be displayed.
-RGB cpu_renderer::CalculatePixel(const double &x, const double &y) {
+RGB cpu_renderer::CalculatePixel(const double &x, const double &y, const Scene &scene) {
     RGB out{0,0,0};
 
     // Pixel Calibration Test
@@ -53,57 +56,70 @@ RGB cpu_renderer::CalculatePixel(const double &x, const double &y) {
 
     vec3 rayLoc(0, 0, -2);
     vec3 rayDir(x, y, -1.0f);
-    vec3 sunDir(-1,-1,1);
+    vec3 sunDir(-.8,-.4,1);
     sunDir.Normalize();
 
-    // Sphere controls
-    float sphereRadius = 0.5;
-    vec3 sphereCenter(0, 0, 0);
-    vec3 sphereColor(0,255,0);
+    float hitDistance = FLT_MAX;
+    const world_object* closestObj = nullptr;
 
-    // Quadratic coefficients for the sphere intersection equation
-    float a = vec3::Dot(rayDir, rayDir);
-    float b = 2.0f * vec3::Dot(rayLoc - sphereCenter, rayDir);
-    float c = vec3::Dot(rayLoc - sphereCenter, rayLoc - sphereCenter) - sphereRadius * sphereRadius;
+    for (const auto& obj : scene.Objects) {
+        const sphere* spherePtr = dynamic_cast<sphere*>(obj);
+        if (spherePtr) {
 
-    // Discriminant of the quadratic equation
-    float disc = b * b - 4.0f * a * c;
+            float sphereRadius = spherePtr->m_scale.x;
+            vec3 sphereCenter = spherePtr->m_position;
 
-    if (disc >= 0) {
-        float sqrt_disc = sqrt(disc);
-        float inv_a = 1.0f / (2.0f * a);
+            // Quadratic coefficients for the sphere intersection equation
+            float a = vec3::Dot(rayDir, rayDir);
+            float b = 2.0f * vec3::Dot(rayLoc - sphereCenter, rayDir);
+            float c = vec3::Dot(rayLoc - sphereCenter, rayLoc - sphereCenter) - sphereRadius * sphereRadius;
 
-        float intersec1 = (-b - sqrt_disc) * inv_a;
-        float intersec2 = (-b + sqrt_disc) * inv_a;
-
-        //At most there can be 2 intersections, so we will use them here.
-        auto* intersec = new float[2] { intersec1, intersec2 };
-
-        for(int i = 0; i < 2; i++) {
-            vec3 hitPos = rayLoc + rayDir * intersec[i];
-            vec3 normal = hitPos - sphereCenter;
-            normal.Normalize();
-
-            // Debug Surface Normal
-            /*out.r = static_cast<uint8_t>(normal.x * 0.5f * 255.999f + 0.5f);
-            out.g = static_cast<uint8_t>(normal.y * 0.5f * 255.999f + 0.5f);
-            out.b = static_cast<uint8_t>(normal.z * 0.5f * 255.999f + 0.5f);*/
-
-            //Highlight only the parts that are visible to the light source
-            float surfaceIntensity = vec3::Dot(normal, sunDir * -1);
-            if (surfaceIntensity < 0.0f) {
-                surfaceIntensity = 0.0f;
+            // Discriminant of the quadratic equation
+            float disc = b * b - 4.0f * a * c;
+            if (disc < 0) {
+                continue;
             }
 
-            //Apply the sun intensity to the albedo
-            out.r = sphereColor.x * surfaceIntensity;
-            out.g = sphereColor.y * surfaceIntensity;
-            out.b = sphereColor.z * surfaceIntensity;
+            float sqrt_disc = sqrt(disc);
+            float inv_a = 1.0f / (2.0f * a);
+
+            // Using the + value instead of - as the negation does backfacing
+            float intersec1 = (-b + sqrt_disc) * inv_a;
+
+            if (intersec1 < hitDistance) {
+                hitDistance = intersec1;
+                closestObj = obj;
+            }
 
         }
-
-        delete[] intersec;
     }
+
+    if (closestObj == nullptr) {
+        return out;
+    }
+
+    vec3 sphereCenter = closestObj->m_position;
+    vec3 sphereColor = closestObj->m_albedoColor;
+
+    vec3 hitPos = rayLoc + rayDir * hitDistance;
+    vec3 normal = hitPos - sphereCenter;
+    normal.Normalize();
+
+    // Debug Surface Normal
+    /*out.r = static_cast<uint8_t>(normal.x * 0.5f * 255.999f + 0.5f);
+    out.g = static_cast<uint8_t>(normal.y * 0.5f * 255.999f + 0.5f);
+    out.b = static_cast<uint8_t>(normal.z * 0.5f * 255.999f + 0.5f);*/
+
+    //Highlight only the parts that are visible to the light source
+    float surfaceIntensity = vec3::Dot(normal, sunDir * -1);
+    if (surfaceIntensity < 0.0f) {
+        surfaceIntensity = 0.0f;
+    }
+
+    //Apply the sun intensity to the albedo
+    out.r = sphereColor.x * surfaceIntensity;
+    out.g = sphereColor.y * surfaceIntensity;
+    out.b = sphereColor.z * surfaceIntensity;
 
     return out;
 }
